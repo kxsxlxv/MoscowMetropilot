@@ -1,0 +1,50 @@
+services:
+  detector:
+    build: .
+    image: moscow-metropilot:humble
+    command:
+      - ros2
+      - run
+      - metropilot_ros
+      - obstacle_detector
+      - --ros-args
+      - -p
+      - input_reliability:=reliable
+      - -p
+      - stale_timeout_s:=${LIDAR_STALE_TIMEOUT_S:-0.5}
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      ROS_LOG_DIR: /tmp/ros-log
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
+    stop_grace_period: 10s
+
+  debug:
+    image: moscow-metropilot:humble
+    profiles: [debug]
+    depends_on: [detector]
+    network_mode: service:detector
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      ROS_LOG_DIR: /tmp/ros-log
+    volumes:
+      - ./data:/data:ro
+      - ./artifacts:/artifacts
+    command: [ros2, run, metropilot_ros, lidar_debug, --scenario, sequence]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"

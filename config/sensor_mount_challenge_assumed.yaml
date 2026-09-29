@@ -1,0 +1,104 @@
+# Metropilot explicit challenge-assumption calibration profile.
+#
+# This file exists because the organizer bags contain PointCloud2 only: no
+# /tf, /tf_static, odometry, IMU, or calibration topic, and no independently
+# supplied sensor-to-train extrinsic is available.
+#
+# IMPORTANT:
+# - values marked "assumed" are NOT measured/calibrated;
+# - this profile is permitted only because runtime_policy explicitly opts in;
+# - config/sensor_mount.yaml remains the fail-closed unresolved production
+#   contract;
+# - telemetry/config readers must preserve uses_assumed_calibration=true.
+#
+# Physical assumption requested for the challenge:
+#   Pandar optical frame is aligned with the train longitudinal axes,
+#   placed at the front reference x=0, centered laterally, z=1.075 m TOR.
+#
+# Bag-native PointCloud axes are a separate layer. Existing organizer replay
+# evidence requires the historical native->vehicle XY mapping
+#   vehicle_x = -native_y
+#   vehicle_y = +native_x
+# which is Rz(+90 deg). With the physical mount yaw now assumed 0 deg, that
+# +90 deg rotation belongs in the native-frame adapter.
+
+sensor:
+  model: Hesai Pandar128E3X
+
+  physical_mount:
+    height_above_top_of_rail_m:
+      value: 1.075
+      status: known
+      source: organizer
+
+    lateral_offset_from_vehicle_center_m:
+      value: 0.0
+      status: known
+      source: organizer
+
+    longitudinal_offset_from_vehicle_reference_m:
+      value: 0.0
+      status: assumed
+      source: challenge_assumption_front_reference
+
+    roll_deg:
+      value: 0.0
+      status: assumed
+      source: challenge_assumption_sensor_aligned_with_train
+
+    pitch_deg:
+      value: 0.0
+      status: assumed
+      source: challenge_assumption_sensor_aligned_with_train
+
+    yaw_deg:
+      value: 0.0
+      status: assumed
+      source: challenge_assumption_sensor_aligned_with_train
+
+native_pointcloud_frames:
+  - frame_id: hesai_lidar
+    dataset: cloud_with_fake_obj
+    observed_messages: 1510
+    adapter_status: assumed_for_challenge
+    runtime_adapter:
+      translation_x_m: 0.0
+      translation_y_m: 0.0
+      translation_z_m: 0.0
+      roll_deg: 0.0
+      pitch_deg: 0.0
+      yaw_deg: 90.0
+      status: assumed
+      note: >
+        Explicit challenge assumption preserving the previously validated
+        provisional organizer replay mapping x_vehicle=-y_native,
+        y_vehicle=+x_native. The additional +0.365 deg rail-fit correction is
+        deliberately NOT promoted because it is circular M6-derived evidence.
+
+  - frame_id: lidar_livox
+    dataset: doubleT_obstacle
+    observed_messages: 201
+    adapter_status: assumed_for_challenge
+    runtime_adapter:
+      translation_x_m: 0.0
+      translation_y_m: 0.0
+      translation_z_m: 0.825
+      roll_deg: 0.0
+      pitch_deg: 0.0
+      yaw_deg: 90.0
+      status: assumed
+      note: >
+        Explicit challenge assumption. +90 deg preserves the same native-axis
+        convention as organizer replay. tz=+0.825 m is the central development
+        value from the stable +0.815..+0.840 m rail-support plateau; it is not
+        an independent measurement and therefore remains status=assumed.
+
+runtime_policy:
+  trust_frame_id_as_extrinsic_calibration: false
+  require_explicit_native_frame_adapter: true
+  require_complete_physical_sensor_mount: true
+  require_both_transforms_before_physical_swept_volume_decision: true
+  unknown_native_frame_status: UNKNOWN
+  incomplete_adapter_status: UNKNOWN
+  permit_research_only_adapter_hypotheses_in_submission: false
+  permit_explicit_assumed_calibration_in_submission: true

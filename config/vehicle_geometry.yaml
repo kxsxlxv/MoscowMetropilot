@@ -1,0 +1,209 @@
+# 81-775 geometry contract for Metropilot.
+#
+# Runtime geometry is intentionally parameteric and vehicle-agnostic: the sweep
+# engine consumes a list of simple components.  The 81-775 cab car below is one
+# concrete parameter set measured from the detailed reference 3D model supplied
+# by the project owner.
+#
+# Coordinate convention:
+#   X = 0 at the midpoint between bogie pivot centres
+#   +X points toward the cab/front end
+#   +Y is vehicle left
+#   Z = 0 is TOR / UGR (top of rail)
+#
+# The six-box runtime LOD is an occupancy approximation, not a certified
+# dynamic clearance contour.
+
+vehicle:
+  family: "81-775 / Moskva-2020 cab car"
+
+  dimensions:
+    length_over_couplers_m:
+      value: 20.080
+      status: measured_from_reference_3d_model
+      use_for_exact_body_solid: false
+      use_for_runtime_box_lod: true
+
+    body_length_without_couplers_m:
+      value: 19.345
+      status: measured_from_reference_3d_model
+
+    overall_width_m:
+      value: 2.830
+      status: measured_from_reference_3d_model
+      use_for_exact_body_solid: false
+      use_for_runtime_box_lod: true
+
+    empty_height_above_tor_m:
+      value: 3.680
+      status: measured_from_reference_3d_model
+      use_for_exact_body_solid: false
+      use_for_runtime_box_lod: true
+
+    bogie_pivot_spacing_m:
+      value: 12.600
+      status: measured_from_reference_3d_model
+      interpretation: "distance between front and rear bogie pivot centres"
+
+    # Legacy name retained for compatibility with the current prototype config.
+    body_base_m:
+      value: 12.600
+      status: measured_from_reference_3d_model
+      interpretation: "bogie pivot/chord base; alias of bogie_pivot_spacing_m"
+      required_validation: null
+
+    bogie_wheelbase_m:
+      value: 2.150
+      status: measured_from_reference_3d_model
+      interpretation: "distance between wheelset centres"
+
+  longitudinal_reference:
+    front_bogie_pivot_x_m: 6.300
+    rear_bogie_pivot_x_m: -6.300
+
+    front_body_end_x_m: 10.260
+    rear_body_end_x_m: -9.085
+
+    front_coupler_end_x_m: 10.510
+    rear_coupler_end_x_m: -9.570
+
+    pivot_to_body_end_m:
+      front: 3.960
+      rear: 2.785
+
+    pivot_to_coupler_end_m:
+      front: 4.210
+      rear: 3.270
+
+  bogie:
+    outer_length_m: 3.645
+    wheelbase_m: 2.150
+    width_without_current_collectors_m: 2.570
+    width_with_current_collectors_m: 3.015
+    z_min_relative_tor_m: 0.000
+    z_max_relative_tor_m: 0.935
+    runtime_envelope_includes_current_collectors: true
+    status: measured_from_reference_3d_model
+
+  coupler:
+    center_z_relative_tor_m: 0.795
+    center_y_m: 0.000
+    runtime_envelope_width_m: 0.600
+    runtime_envelope_height_m: 0.600
+    status: measured_from_reference_3d_model
+
+  runtime_lod:
+    type: oriented_box_components
+    component_count: 6
+
+    # Component boxes are specified in the vehicle reference frame above.
+    # Bogie boxes use local track-tangent frames at their pivots; the other
+    # components use the body-chord frame.
+    components:
+      - id: body_front_lower
+        primitive: box
+        anchor: body_chord
+        x_min_m: 8.510
+        x_max_m: 10.260
+        y_min_m: -1.415
+        y_max_m: 1.415
+        z_min_m: 0.550
+        z_max_m: 3.680
+        derived_dimensions_m:
+          length: 1.750
+          width: 2.830
+          height: 3.130
+        status: measured_box_approximation
+
+      - id: body_main
+        primitive: box
+        anchor: body_chord
+        x_min_m: -9.085
+        x_max_m: 8.510
+        y_min_m: -1.415
+        y_max_m: 1.415
+        z_min_m: 0.935
+        z_max_m: 3.680
+        derived_dimensions_m:
+          length: 17.595
+          width: 2.830
+          height: 2.745
+        status: measured_box_approximation
+
+      - id: front_bogie
+        primitive: box
+        anchor: front_pivot
+        x_min_relative_anchor_m: -1.8225
+        x_max_relative_anchor_m: 1.8225
+        y_min_m: -1.5075
+        y_max_m: 1.5075
+        z_min_m: 0.000
+        z_max_m: 0.935
+        derived_dimensions_m:
+          length: 3.645
+          width: 3.015
+          height: 0.935
+        includes_current_collectors: true
+        status: measured_box_approximation
+
+      - id: rear_bogie
+        primitive: box
+        anchor: rear_pivot
+        x_min_relative_anchor_m: -1.8225
+        x_max_relative_anchor_m: 1.8225
+        y_min_m: -1.5075
+        y_max_m: 1.5075
+        z_min_m: 0.000
+        z_max_m: 0.935
+        derived_dimensions_m:
+          length: 3.645
+          width: 3.015
+          height: 0.935
+        includes_current_collectors: true
+        status: measured_box_approximation
+
+      - id: underframe_equipment
+        primitive: box
+        anchor: body_chord
+        x_min_m: -4.4775
+        x_max_m: 4.4775
+        y_min_m: -1.415
+        y_max_m: 1.415
+        z_min_m: 0.110
+        z_max_m: 0.935
+        derived_dimensions_m:
+          length: 8.955
+          width: 2.830
+          height: 0.825
+        interpretation: "single conservative box for equipment between bogie envelopes"
+        status: measured_box_approximation
+
+      - id: coupler_longitudinal_envelope
+        primitive: box
+        anchor: body_chord
+        x_min_m: -9.570
+        x_max_m: 10.510
+        y_min_m: -0.300
+        y_max_m: 0.300
+        z_min_m: 0.495
+        z_max_m: 1.095
+        derived_dimensions_m:
+          length: 20.080
+          width: 0.600
+          height: 0.600
+        center_z_m: 0.795
+        interpretation: "single longitudinal occupancy box spanning both coupler ends"
+        status: measured_box_approximation
+
+  unresolved:
+    exact_body_cross_section: null
+    front_coupler_articulation_range: null
+    rear_coupler_articulation_range: null
+    suspension_dynamic_allowances: null
+    current_collector_dynamic_allowances: null
+
+runtime_policy:
+  allow_provisional_geometry_for_development_visualization: true
+  allow_provisional_geometry_to_be_labeled_certified_clearance: false
+  require_uncertainty_margin_for_provisional_components: true
+  runtime_geometry_lod: oriented_box_components
