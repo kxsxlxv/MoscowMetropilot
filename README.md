@@ -1,104 +1,153 @@
-# MoscowMetropilot
+# MoscowMetropilot — инструкция по запуску и валидации
 
-Minimal final runtime package for the LiDAR-only obstacle detector.
+Репозиторий содержит итоговую версию LiDAR-only детектора препятствий для ROS 2 Humble.
 
-## Runtime interface
+Решение принимает облако точек `sensor_msgs/msg/PointCloud2`, оценивает геометрию рельсового пути и возможный габарит движения состава, выделяет геометрически необъяснённые объекты внутри этого габарита и применяет консервативное подтверждение по последовательным кадрам.
 
-- ROS 2 Humble / Ubuntu 22.04.
-- Input: `/lidar_points` — `sensor_msgs/msg/PointCloud2`.
-- Output: `/obstacle_detected` — `std_msgs/msg/Bool`.
-- `true` means a candidate was confirmed by the conservative temporal gate.
-- `false` means "not confirmed"; it also covers insufficient/invalid geometry or input and must not be interpreted as an independent proof of free track.
+## Интерфейс
 
-The included calibration profile is the challenge-data assumption for `hesai_lidar`. For another sensor/frame, replace it with measured extrinsics before interpreting physical results.
+Входной ROS-топик:
 
-## Quick start without a dataset
+`/lidar_points`
 
-Requirements: Docker Engine with Compose v2 and Linux containers.
+Тип:
+
+`sensor_msgs/msg/PointCloud2`
+
+Выходной ROS-топик:
+
+`/obstacle_detected`
+
+Тип:
+
+`std_msgs/msg/Bool`
+
+Значение `true` означает, что детектор подтвердил препятствие.
+
+Значение `false` означает отсутствие подтверждённого препятствия. Оно также используется при недостаточной или неоднозначной геометрии, некорректном входном облаке, неизвестной системе координат и потере входного потока. Поэтому `false` не следует интерпретировать как отдельное доказательство свободного пути.
+
+## Рекомендуемый способ запуска
+
+Требуются Docker Engine и Docker Compose v2 с Linux containers.
+
+ROS 2 на хостовой системе устанавливать не требуется: ROS 2 Humble находится внутри Docker-образа.
+
+После клонирования репозитория:
 
 ```bash
+git clone https://github.com/kxsxlxv/MoscowMetropilot.git
+cd MoscowMetropilot
+
 mkdir -p data artifacts
+
 docker compose build
 docker compose up -d detector
-docker compose run --rm debug
 ```
 
-The default synthetic sequence is 30 frames: empty -> obstacle -> empty.
-Expected summary:
+Проверить запуск:
+
+```bash
+docker compose ps
+docker compose logs detector
+```
+
+При корректном старте в логах должна появиться строка:
 
 ```text
-"sent": 30
-"responses": 30
-"true": 8
+Precision-first detector ready; confirmation=3 frames, assumed_calibration=true
 ```
 
-Stop:
+## Проверка на предоставленном датасете
 
-```bash
-docker compose down
+Для проверки достаточно поместить ROS 2 SQLite bag или каталог split-bag в:
+
+```text
+./data/
 ```
 
-## End-to-end ROS/DDS validation
+Каталог монтируется в контейнер read-only как:
 
-With the detector running:
-
-```bash
-docker compose exec detector /entrypoint.sh python3 /ws/tools/test_ros_integration.py
+```text
+/data
 ```
 
-The test exercises XYZ/XYZI/enriched PointCloud2, confirmation/reset behavior, stale input, below-rail rejection, low obstacles, split-bag playback, a large cloud, malformed input, unknown frame IDs and timestamp discontinuities.
-
-## Native validation without ROS
-
-Ubuntu dependencies:
-
-```bash
-sudo apt-get update
-sudo apt-get install -y build-essential cmake libsqlite3-dev python3 python3-numpy
-```
-
-Run:
-
-```bash
-cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release
-cmake --build cpp/build --parallel
-ctest --test-dir cpp/build --output-on-failure
-
-python3 tools/test_bag_sequence.py
-python3 tools/test_precision_replay.py cpp/build/metropilot_precision_replay
-```
-
-## Optional bag playback
-
-No dataset is included in this repository. Put a ROS 2 SQLite bag or split-bag directory under `./data`; it is mounted read-only as `/data`.
-
-Example:
+Например:
 
 ```bash
 docker compose run --rm debug \
   ros2 run metropilot_ros lidar_debug \
-  --db /data/my_bag \
-  --start 0 --end 100 \
+  --db /data/<recording> \
+  --start 0 \
+  --end 100 \
   --report /artifacts/result.csv
 ```
 
-For deliberately slow visual playback you may temporarily start the detector with a larger wall-clock stale timeout; keep the value a floating-point literal:
+В CSV сохраняются:
 
-```bash
-LIDAR_STALE_TIMEOUT_S=5.0 docker compose up -d --force-recreate detector
+- номер кадра;
+- исходная временная метка;
+- результат `true/false`;
+- измеренная round-trip latency.
+
+## Координаты и калибровка
+
+В репозитории находится профиль преобразования координат, использованный для предоставленных challenge-записей.
+
+Для `hesai_lidar` используется принятое для этих данных преобразование в систему вагона и высота установки лидара.
+
+Этот профиль является предположением для предоставленного набора данных, а не универсальной калибровкой произвольного сенсора.
+
+При подключении другого лидара или симулятора необходимо заменить параметры в:
+
+```text
+config/sensor_mount_challenge_assumed.yaml
 ```
 
-Restore the normal value afterwards:
+на фактически измеренные extrinsics и соответствующий `frame_id`.
+
+Геометрия состава находится в:
+
+```text
+config/vehicle_geometry.yaml
+```
+
+## Поведение при потере данных
+
+Для runtime используется fail-safe сброс накопленного подтверждения.
+
+Если свежие облака перестают поступать, ранее выставленный `true` сбрасывается.
+
+Стандартный `stale_timeout_s`:
+
+```text
+0.5 s
+```
+
+При намеренно замедленном ручном воспроизведении записи его можно временно увеличить, например:
+
+```bash
+LIDAR_STALE_TIMEOUT_S=5.0 \
+docker compose up -d --force-recreate detector
+```
+
+Для штатной работы следует использовать стандартное значение.
+
+## Остановка
 
 ```bash
 docker compose down
-docker compose up -d detector
 ```
 
-## Source layout
+## Состав репозитория
 
-- `cpp/` — ROS-independent detection core and minimal native tests.
-- `ros2/metropilot_ros/` — ROS 2 detector and debug publisher.
-- `config/` — challenge calibration assumption and vehicle geometry.
-- `tools/` — dataset-free smoke/integration tests.
-- `Dockerfile`, `compose.yaml` — reproducible ROS 2 Humble runtime.
+`cpp/` — ROS-независимое C++-ядро детекции.
+
+`ros2/metropilot_ros/` — ROS 2 Humble-нода `obstacle_detector` и средство воспроизведения.
+
+`config/` — конфигурация сенсора и геометрии состава.
+
+`tools/` — проверки, не требующие внешнего датасета.
+
+`Dockerfile` и `compose.yaml` — воспроизводимая среда запуска.
+
+Исследовательские материалы, промежуточные эксперименты, отчёты и датасеты в итоговый репозиторий не включены.
